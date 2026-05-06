@@ -15,9 +15,7 @@ pip install flask flask-cors yt-dlp
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import yt_dlp
-import base64
 import os
-import re
 import tempfile
 import uuid
 
@@ -41,50 +39,12 @@ VIDEO_QUALITY = {
     '480p': 'bestvideo[height<=480]+bestaudio/best[height<=480]'
 }
 
-# Decode base64-encoded cookies from env var into a temp file so yt-dlp
-# can use them. Required to bypass YouTube bot detection on datacenter IPs.
-COOKIES_FILE = None
-
-
-def _setup_cookies():
-    global COOKIES_FILE
-    b64 = os.environ.get('YT_COOKIES_B64', '').strip()
-    if not b64:
-        print("No YT_COOKIES_B64 set — running without cookies")
-        return
-    try:
-        path = os.path.join(tempfile.gettempdir(), 'yt_cookies.txt')
-        with open(path, 'wb') as f:
-            f.write(base64.b64decode(b64))
-        COOKIES_FILE = path
-        print(f"YouTube cookies loaded into {path}")
-    except Exception as e:
-        print(f"Warning: failed to load YT_COOKIES_B64: {e}")
-
-
-_setup_cookies()
-
-
-def _yt_extra_opts():
-    """Shared yt-dlp options: alternate player clients + cookies if available."""
-    opts = {
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['tv_embedded', 'tv', 'ios', 'mweb'],
-            }
-        }
-    }
-    if COOKIES_FILE:
-        opts['cookiefile'] = COOKIES_FILE
-    return opts
-
 
 def get_media_info(url):
     """Extract metadata from URL without downloading"""
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
-        **_yt_extra_opts(),
     }
     
     try:
@@ -110,7 +70,7 @@ def download_audio(url, format_type='mp3', quality='high'):
     if format_type == 'mp3':
         bitrate = AUDIO_QUALITY.get(quality, '320')
         ydl_opts = {
-            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+            'format': 'bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -119,11 +79,10 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
-            **_yt_extra_opts(),
         }
     elif format_type == 'wav':
         ydl_opts = {
-            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+            'format': 'bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -131,11 +90,10 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
-            **_yt_extra_opts(),
         }
     elif format_type == 'flac':
         ydl_opts = {
-            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+            'format': 'bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -143,7 +101,6 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
-            **_yt_extra_opts(),
         }
     else:
         raise Exception(f"Unsupported audio format: {format_type}")
@@ -179,7 +136,6 @@ def download_video(url, format_type='mp4', quality='1080p'):
         'quiet': True,
         'no_warnings': True,
         'merge_output_format': format_type,
-        **_yt_extra_opts(),
     }
     
     # Special handling for webm
@@ -303,25 +259,13 @@ def extract_media():
         return jsonify({'error': str(e)}), 500
 
 
-def _sanitize_filename(name, max_len=120):
-    """Strip characters disallowed in Windows/macOS filenames and trim length."""
-    if not name:
-        return ''
-    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', name)
-    cleaned = cleaned.strip().strip('.')
-    return cleaned[:max_len]
-
-
 @app.route('/api/download/<file_id>', methods=['GET'])
 def download_file(file_id):
     """Download the converted media file"""
     try:
         # Check all supported formats
         all_formats = ['mp3', 'wav', 'flac', 'mp4', 'webm', 'mkv']
-
-        title = _sanitize_filename(request.args.get('title', ''))
-        bitrate = _sanitize_filename(request.args.get('bitrate', ''))
-
+        
         for ext in all_formats:
             file_path = os.path.join(DOWNLOAD_DIR, f"{file_id}.{ext}")
             if os.path.exists(file_path):
@@ -333,21 +277,13 @@ def download_file(file_id):
                     'webm': 'video/webm',
                     'mkv': 'video/x-matroska'
                 }
-
-                if title and bitrate:
-                    filename = f"{title} - {bitrate}.{ext}"
-                elif title:
-                    filename = f"{title}.{ext}"
-                else:
-                    filename = f"media.{ext}"
-
                 return send_file(
                     file_path,
                     as_attachment=True,
-                    download_name=filename,
+                    download_name=f"media.{ext}",
                     mimetype=mime_types.get(ext, 'application/octet-stream')
                 )
-
+        
         return jsonify({'error': 'File not found'}), 404
     
     except Exception as e:
