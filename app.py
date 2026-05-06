@@ -40,12 +40,23 @@ VIDEO_QUALITY = {
     '480p': 'bestvideo[height<=480]+bestaudio/best[height<=480]'
 }
 
+# Try alternate YouTube clients to dodge datacenter-IP bot challenges.
+# Order matters — yt-dlp tries each until one returns playable formats.
+YT_BOT_BYPASS_OPTS = {
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['ios', 'mweb', 'web'],
+        }
+    }
+}
+
 
 def get_media_info(url):
     """Extract metadata from URL without downloading"""
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
+        **YT_BOT_BYPASS_OPTS,
     }
     
     try:
@@ -80,6 +91,7 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
+            **YT_BOT_BYPASS_OPTS,
         }
     elif format_type == 'wav':
         ydl_opts = {
@@ -91,6 +103,7 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
+            **YT_BOT_BYPASS_OPTS,
         }
     elif format_type == 'flac':
         ydl_opts = {
@@ -102,6 +115,7 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
+            **YT_BOT_BYPASS_OPTS,
         }
     else:
         raise Exception(f"Unsupported audio format: {format_type}")
@@ -137,6 +151,7 @@ def download_video(url, format_type='mp4', quality='1080p'):
         'quiet': True,
         'no_warnings': True,
         'merge_output_format': format_type,
+        **YT_BOT_BYPASS_OPTS,
     }
     
     # Special handling for webm
