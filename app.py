@@ -45,7 +45,7 @@ VIDEO_QUALITY = {
 YT_BOT_BYPASS_OPTS = {
     'extractor_args': {
         'youtube': {
-            'player_client': ['ios', 'mweb', 'web'],
+            'player_client': ['tv_embedded', 'tv', 'ios', 'mweb'],
         }
     }
 }
@@ -82,7 +82,7 @@ def download_audio(url, format_type='mp3', quality='high'):
     if format_type == 'mp3':
         bitrate = AUDIO_QUALITY.get(quality, '320')
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -95,7 +95,7 @@ def download_audio(url, format_type='mp3', quality='high'):
         }
     elif format_type == 'wav':
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -107,7 +107,7 @@ def download_audio(url, format_type='mp3', quality='high'):
         }
     elif format_type == 'flac':
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
