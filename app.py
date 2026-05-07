@@ -48,16 +48,16 @@ def _setup_cookies():
     global COOKIES_FILE
     b64 = os.environ.get('YT_COOKIES_B64', '').strip()
     if not b64:
-        print("No YT_COOKIES_B64 set — running without cookies")
+        print("[startup] No YT_COOKIES_B64 set — running without cookies", flush=True)
         return
     try:
         path = os.path.join(tempfile.gettempdir(), 'yt_cookies.txt')
         with open(path, 'wb') as f:
             f.write(base64.b64decode(b64))
         COOKIES_FILE = path
-        print(f"YouTube cookies loaded into {path}")
+        print(f"[startup] YouTube cookies loaded into {path} ({len(b64)} chars b64)", flush=True)
     except Exception as e:
-        print(f"Warning: failed to load YT_COOKIES_B64: {e}")
+        print(f"[startup] Warning: failed to load YT_COOKIES_B64: {e}", flush=True)
 
 
 _setup_cookies()
@@ -379,6 +379,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'service': 'Media Forge API',
+        'cookies_loaded': COOKIES_FILE is not None,
         'supported_audio': ['mp3', 'wav', 'flac'],
         'supported_video': ['mp4', 'webm', 'mkv']
     }), 200
