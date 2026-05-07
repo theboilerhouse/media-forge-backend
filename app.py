@@ -15,6 +15,7 @@ pip install flask flask-cors yt-dlp
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import yt_dlp
+import base64
 import os
 import re
 import tempfile
@@ -40,12 +41,47 @@ VIDEO_QUALITY = {
     '480p': 'bestvideo[height<=480]+bestaudio/best[height<=480]'
 }
 
+COOKIES_FILE = None
+
+
+def _setup_cookies():
+    global COOKIES_FILE
+    b64 = os.environ.get('YT_COOKIES_B64', '').strip()
+    if not b64:
+        print("No YT_COOKIES_B64 set — running without cookies")
+        return
+    try:
+        path = os.path.join(tempfile.gettempdir(), 'yt_cookies.txt')
+        with open(path, 'wb') as f:
+            f.write(base64.b64decode(b64))
+        COOKIES_FILE = path
+        print(f"YouTube cookies loaded into {path}")
+    except Exception as e:
+        print(f"Warning: failed to load YT_COOKIES_B64: {e}")
+
+
+_setup_cookies()
+
+
+def _yt_extra_opts():
+    opts = {
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['tv_embedded', 'tv', 'ios', 'mweb'],
+            }
+        }
+    }
+    if COOKIES_FILE:
+        opts['cookiefile'] = COOKIES_FILE
+    return opts
+
 
 def get_media_info(url):
     """Extract metadata from URL without downloading"""
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
+        **_yt_extra_opts(),
     }
     
     try:
@@ -71,7 +107,7 @@ def download_audio(url, format_type='mp3', quality='high'):
     if format_type == 'mp3':
         bitrate = AUDIO_QUALITY.get(quality, '320')
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -80,10 +116,11 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
+            **_yt_extra_opts(),
         }
     elif format_type == 'wav':
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -91,10 +128,11 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
+            **_yt_extra_opts(),
         }
     elif format_type == 'flac':
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -102,6 +140,7 @@ def download_audio(url, format_type='mp3', quality='high'):
             }],
             'quiet': True,
             'no_warnings': True,
+            **_yt_extra_opts(),
         }
     else:
         raise Exception(f"Unsupported audio format: {format_type}")
@@ -137,6 +176,7 @@ def download_video(url, format_type='mp4', quality='1080p'):
         'quiet': True,
         'no_warnings': True,
         'merge_output_format': format_type,
+        **_yt_extra_opts(),
     }
     
     # Special handling for webm
