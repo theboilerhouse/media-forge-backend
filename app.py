@@ -16,6 +16,7 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import yt_dlp
 import os
+import re
 import tempfile
 import uuid
 
@@ -259,13 +260,25 @@ def extract_media():
         return jsonify({'error': str(e)}), 500
 
 
+def _sanitize_filename(name, max_len=120):
+    """Strip characters disallowed in Windows/macOS filenames and trim length."""
+    if not name:
+        return ''
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', name)
+    cleaned = cleaned.strip().strip('.')
+    return cleaned[:max_len]
+
+
 @app.route('/api/download/<file_id>', methods=['GET'])
 def download_file(file_id):
     """Download the converted media file"""
     try:
         # Check all supported formats
         all_formats = ['mp3', 'wav', 'flac', 'mp4', 'webm', 'mkv']
-        
+
+        title = _sanitize_filename(request.args.get('title', ''))
+        bitrate = _sanitize_filename(request.args.get('bitrate', ''))
+
         for ext in all_formats:
             file_path = os.path.join(DOWNLOAD_DIR, f"{file_id}.{ext}")
             if os.path.exists(file_path):
@@ -277,13 +290,21 @@ def download_file(file_id):
                     'webm': 'video/webm',
                     'mkv': 'video/x-matroska'
                 }
+
+                if title and bitrate:
+                    filename = f"{title} - {bitrate}.{ext}"
+                elif title:
+                    filename = f"{title}.{ext}"
+                else:
+                    filename = f"media.{ext}"
+
                 return send_file(
                     file_path,
                     as_attachment=True,
-                    download_name=f"media.{ext}",
+                    download_name=filename,
                     mimetype=mime_types.get(ext, 'application/octet-stream')
                 )
-        
+
         return jsonify({'error': 'File not found'}), 404
     
     except Exception as e:
